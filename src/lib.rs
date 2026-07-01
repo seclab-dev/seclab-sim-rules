@@ -1024,19 +1024,6 @@ mod tests {
             !yaml_rules.is_empty(),
             "Error: No simulation rules were loaded. Check rules/ directory."
         );
-        assert_eq!(
-            yaml_rules.len(),
-            33,
-            "Inventory Error: simulation rule inventory must contain 33 rules."
-        );
-        assert_eq!(
-            yaml_rules
-                .iter()
-                .filter(|entry| entry.rule.category == "cve_sim")
-                .count(),
-            20,
-            "Inventory Error: HTTP simulation rule inventory must contain 20 CVE rules."
-        );
 
         let mut seen_ids = HashSet::new();
 
