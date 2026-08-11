@@ -15,12 +15,15 @@ use clap::Parser;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use ring::signature;
-use seclab_sim_rules::{RulePackageManifestProto, SimRulePackageProto, SimRuleProto, YamlRule};
+use seclab_sim_rules::{
+    RuleEndpointProto, RulePackageManifestProto, SimRulePackageProto, SimRuleProto, YamlRule,
+};
 
 /// 该规则库要求的最低主控版本号，当规则库开始依赖主控新版本才引入的解析能力时更新
-const MIN_SECLAB_VERSION: &str = "0.1.0-alpha.1";
+const MIN_SECLAB_VERSION: &str = "0.1.0-alpha.3";
 /// 规则集的载荷格式版本，标识Protobuf schema 和  config_json 内部结构的兼容代次，仅当 Protobuf字段发生不兼容变更、或config_json  内部 JSON schema发生不兼容变更时递增
 const RULESET_FORMAT_VERSION: i32 = 1;
+const PACKAGE_SCHEMA_VERSION: i32 = 1;
 
 /// SecLab 仿真规则库一键打包与签名工具
 #[derive(Parser, Debug)]
@@ -88,6 +91,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             protocol: y.protocol.clone(),
             default_port: y.default_port,
             config_json,
+            endpoints: protocol_endpoints(&y.protocol, y.default_port)?,
         });
     }
 
@@ -102,6 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         min_seclab_version: MIN_SECLAB_VERSION.to_string(),
         generated_at: now_epoch,
         rule_count: proto_rules.len() as i32,
+        schema_version: PACKAGE_SCHEMA_VERSION,
     };
 
     let package = SimRulePackageProto {
@@ -179,7 +184,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     signing_key.cleanup();
 
     // 8. 内存压缩为外层 .slrp。该后缀表示 SecLab Rule Package，内部仍是 gzip tar。
-    let output_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/dist");
+    let output_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("dist");
     fs::create_dir_all(&output_dir)?;
     let output_path = output_dir.join(format!("seclab-sim-rules-{}.slrp", version));
     let file = fs::File::create(&output_path)?;
@@ -210,6 +215,55 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     Ok(())
+}
+
+fn protocol_port(protocol: &str) -> Result<u16, Box<dyn std::error::Error>> {
+    match protocol {
+        "http" => Ok(80),
+        "redis" => Ok(6379),
+        "smtp" => Ok(25),
+        "pop3" => Ok(110),
+        "imap" => Ok(143),
+        "ssh" => Ok(22),
+        "ftp" => Ok(21),
+        "rdp" => Ok(3389),
+        "telnet" => Ok(23),
+        "mysql" => Ok(3306),
+        "postgresql" => Ok(5432),
+        "smb" => Ok(445),
+        "ldap" => Ok(389),
+        "dns" => Ok(53),
+        _ => Err(format!("unsupported protocol: {protocol}").into()),
+    }
+}
+
+fn protocol_endpoints(
+    protocol: &str,
+    default_port: Option<i64>,
+) -> Result<Vec<RuleEndpointProto>, Box<dyn std::error::Error>> {
+    let container_port = protocol_port(protocol)?;
+    let default_host_port = default_port
+        .and_then(|port| u16::try_from(port).ok())
+        .unwrap_or(container_port);
+    if protocol == "dns" {
+        return Ok([("dns-tcp", "tcp"), ("dns-udp", "udp")]
+            .into_iter()
+            .map(|(id, transport)| RuleEndpointProto {
+                id: id.to_string(),
+                transport: transport.to_string(),
+                container_port: i32::from(container_port),
+                default_host_port: i32::from(default_host_port),
+                required: true,
+            })
+            .collect());
+    }
+    Ok(vec![RuleEndpointProto {
+        id: "main".to_string(),
+        transport: "tcp".to_string(),
+        container_port: i32::from(container_port),
+        default_host_port: i32::from(default_host_port),
+        required: true,
+    }])
 }
 
 struct LoadedRule {
@@ -385,10 +439,24 @@ fn der_to_key_pair(
 /// 执行与主测试同级别的静态安全审计
 fn audit_rules(rules: &[LoadedRule]) -> Result<(), Box<dyn std::error::Error>> {
     let mut seen_ids = HashSet::new();
-    let allowed_protocols: HashSet<&str> =
-        ["http", "redis", "smtp", "pop3", "imap", "ssh", "ftp", "rdp"]
-            .into_iter()
-            .collect();
+    let allowed_protocols: HashSet<&str> = [
+        "http",
+        "redis",
+        "smtp",
+        "pop3",
+        "imap",
+        "ssh",
+        "ftp",
+        "rdp",
+        "telnet",
+        "mysql",
+        "postgresql",
+        "smb",
+        "ldap",
+        "dns",
+    ]
+    .into_iter()
+    .collect();
     let allowed_categories: HashSet<&str> = ["cve_sim", "vuln_sim", "honeypot", "test_env"]
         .into_iter()
         .collect();
@@ -485,8 +553,58 @@ fn audit_rules(rules: &[LoadedRule]) -> Result<(), Box<dyn std::error::Error>> {
                     format!("Boundary Error: RDP rule ID out of bounds. {}", context).into(),
                 );
             }
+            "telnet" if !(630000..=639999).contains(&r.id) => {
+                return Err(
+                    format!("Boundary Error: Telnet rule ID out of bounds. {}", context).into(),
+                );
+            }
+            "mysql" if !(310000..=319999).contains(&r.id) => {
+                return Err(
+                    format!("Boundary Error: MySQL rule ID out of bounds. {}", context).into(),
+                );
+            }
+            "postgresql" if !(320000..=329999).contains(&r.id) => {
+                return Err(format!(
+                    "Boundary Error: PostgreSQL rule ID out of bounds. {}",
+                    context
+                )
+                .into());
+            }
+            "smb" if !(700000..=709999).contains(&r.id) => {
+                return Err(
+                    format!("Boundary Error: SMB rule ID out of bounds. {}", context).into(),
+                );
+            }
+            "ldap" if !(710000..=719999).contains(&r.id) => {
+                return Err(
+                    format!("Boundary Error: LDAP rule ID out of bounds. {}", context).into(),
+                );
+            }
+            "dns" if !(500000..=509999).contains(&r.id) => {
+                return Err(
+                    format!("Boundary Error: DNS rule ID out of bounds. {}", context).into(),
+                );
+            }
             _ => {}
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::protocol_endpoints;
+
+    #[test]
+    fn dns_rules_are_packed_with_tcp_and_udp_endpoints() {
+        let endpoints = protocol_endpoints("dns", Some(1053)).unwrap();
+        assert_eq!(endpoints.len(), 2);
+        assert_eq!(endpoints[0].id, "dns-tcp");
+        assert_eq!(endpoints[0].transport, "tcp");
+        assert_eq!(endpoints[1].id, "dns-udp");
+        assert_eq!(endpoints[1].transport, "udp");
+        assert!(endpoints.iter().all(|endpoint| {
+            endpoint.container_port == 53 && endpoint.default_host_port == 1053
+        }));
+    }
 }

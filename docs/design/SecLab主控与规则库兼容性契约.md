@@ -32,7 +32,7 @@
 
 | 端     | 文件路径                                     | 结构体                                                            |
 | ------ | -------------------------------------------- | ----------------------------------------------------------------- |
-| 主控   | `crates/seclab/src/services/rule_package.rs` | `SimRuleProto`、`RulePackageManifestProto`、`SimRulePackageProto` |
+| 套件 API | `seclab-suite-protocol-simulation/crates/protocol-simulation/src/rule_package.rs` | `SimRuleProto`、`RuleEndpointProto`、`RulePackageManifestProto`、`SimRulePackageProto` |
 | 规则库 | `seclab-sim-rules/src/lib.rs`                | 同名结构体                                                        |
 
 任何一端修改上述结构体时，**必须同步更新对端的对应定义**，并在 PR 描述中显式标注跨仓库同步关系。
@@ -43,7 +43,11 @@
 
 `RulePackageManifestProto.ruleset_format_version` 标识规则包的整体格式版本，用于主控在导入时判断自身是否具备对应的解析能力。
 
-### 2.1 递增时机
+### 2.1 Alpha 阶段策略
+
+当前尚未发布正式版本，`schema_version` 与 `ruleset_format_version` 均固定为 `1`。alpha 阶段发生不兼容变化时，规则库、套件 API、engine 和 UI 必须同步重写 v1，不保留旧 alpha 数据或兼容分支，也不得创建 v2。
+
+首次正式版本发布后，才按以下规则递增格式版本：
 
 当且仅当以下情况发生时，规则库端**必须**递增 `ruleset_format_version`：
 
@@ -53,7 +57,13 @@
 
 ### 2.2 主控校验义务
 
-主控在导入规则包时，必须检查 `ruleset_format_version` 是否在自身支持的版本范围内。当前支持的版本为 `1`。若收到不支持的版本号，应拒绝导入并返回明确的错误信息。
+套件 API 在导入规则包时，必须同时检查 `schema_version` 与 `ruleset_format_version`。当前只接受 `1`，收到其他版本必须拒绝导入。
+
+### 2.3 v1 端点与签名
+
+- 每条规则必须显式携带具名端点，端点的 transport、container port 和 required 属性必须与 common crate 的协议描述一致。
+- `rules.bin.sig` 必须覆盖原始 `rules.bin`，导入端使用可信 Ed25519/minisign 公钥验签。
+- 仅存在签名文件、签名编码有效但验证失败、端点缺失或协议行为 schema 不匹配，都必须拒绝整个导入事务。
 
 ---
 
@@ -122,7 +132,7 @@
 开发者在涉及规则库或主控的规则包相关代码变更时，应逐项确认以下检查清单：
 
 - [ ] Protobuf 结构体是否在两端保持 tag、类型和字段名的逐字段对齐？
-- [ ] 是否存在不兼容变更？若是，`ruleset_format_version` 是否已递增？
+- [ ] 当前是否仍处于 alpha？若是，是否同步重写 v1 且未引入 v2？正式发布后才检查格式版本递增。
 - [ ] 规则库的 `min_seclab_version` 是否反映了其所依赖的最低主控能力？
 - [ ] 所有包规则 ID 是否处于 `[1, 999_999]` 区间？
 - [ ] 若涉及 schema 变更，是否遵循了"主控先行发版"的顺序？

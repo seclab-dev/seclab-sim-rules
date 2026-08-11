@@ -2,7 +2,13 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，并遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [0.1.0-alpha.1] - 2026-06-28
+## [Unreleased]
+
+### Changed in alpha development
+
+- 重写规则包 v1，增加 `schema_version: 1` 与具名端点声明，并要求导入端实际验证 Ed25519/minisign 签名。
+- 增加 Telnet、MySQL、PostgreSQL、SMB 和 LDAP 基础诱捕规则；格式版本仍保持 v1。
+- 增加同时声明 `dns-tcp` 与 `dns-udp` 端点的 DNS 诱捕规则，默认主机端口为 1053，容器内保持 53/TCP 与 53/UDP。
 
 ### Added
 

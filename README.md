@@ -6,13 +6,13 @@
 
 ## 当前库存
 
-当前规则包包含 30 条规则：
+当前规则包包含 46 条规则，覆盖 HTTP、Redis、SMTP、POP3、IMAP、SSH、FTP、RDP、Telnet、MySQL、PostgreSQL、SMB、LDAP 和 DNS：
 
 | 分类 | 数量 | 说明 |
 | --- | --- | --- |
-| `cve_sim` | 20 | 真实 CVE 仿真规则。 |
+| `cve_sim` | 27 | 真实 CVE 仿真规则。 |
 | `vuln_sim` | 4 | Redis 泛漏洞仿真规则。 |
-| `honeypot` | 5 | HTTP、Redis 和邮件协议诱捕规则。 |
+| `honeypot` | 14 | HTTP、Redis、邮件、远程访问、数据库、企业协议与 DNS 诱捕规则。 |
 | `test_env` | 1 | HTTP 测试环境规则。 |
 
 ## 目录结构
@@ -24,7 +24,16 @@ rules/
 │   ├── honeypot/
 │   └── test-env/
 ├── database/
-│   └── redis/
+│   ├── redis/
+│   ├── mysql/
+│   └── postgresql/
+├── enterprise/
+│   ├── ldap/
+│   └── smb/
+├── remote-access/
+│   └── telnet/
+├── network/
+│   └── dns/
 └── mail/
     ├── smtp/
     ├── pop3/
@@ -79,28 +88,7 @@ cargo build --release
 seclab-sim-rules-<version>.slrp
 ```
 
-规则包包含规则清单、Protobuf 载荷、签名和版本声明。`min_seclab_version` 用于声明最低主控版本，`ruleset_format_version` 用于声明规则包格式版本。
-
-## 发布
-
-规则包通过 `Publish Simulation Rules` workflow 发布到 GitHub Release。
-
-发布标签格式：
-
-```text
-sim-rules/v<version>
-```
-
-示例：
-
-```text
-sim-rules/v0.1.0-alpha.1
-```
-
-发布前需要在 GitHub Secrets 中配置：
-
-- `SECLAB_SIGNING_PRIVATE_KEY`：规则包签名私钥文件内容。
-- `SECLAB_SIGNING_PRIVATE_KEY_PASSWORD`：签名私钥密码；未加密私钥可留空。
+规则包的 v1 契约包含 `schema_version: 1`、具名端点清单、Protobuf 载荷、Ed25519/minisign 签名和版本声明。导入端必须实际验签，不能只检查签名文件存在。alpha 阶段直接重写 v1；正式版本发布后才允许引入新的格式版本。
 
 ## 契约
 

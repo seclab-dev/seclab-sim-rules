@@ -1,0 +1,22 @@
+id: 317001
+defaultPort: 3306
+name: "MySQL 诱捕服务"
+nameEn: "MySQL Decoy Service"
+cve: null
+category: "honeypot"
+vendor: "Oracle"
+product: "MySQL"
+severity: "info"
+references:
+  - "https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase.html"
+tags: ["mysql", "database", "honeypot"]
+ruleVersion: "0.1.0-alpha.1"
+descriptionZh: "提供可识别的 MySQL 握手并记录认证探测。"
+descriptionEn: "Provides an identifiable MySQL handshake and records authentication probes."
+protocol: "mysql"
+configYaml:
+  server_version: "8.0.36-seclab"
+  credentials:
+    - username: "app"
+      password: "example-only"
+  databases: ["app", "analytics"]

@@ -29,6 +29,23 @@ pub struct SimRuleProto {
     pub default_port: Option<i64>,
     #[prost(string, tag = "10")]
     pub config_json: String, // 内层行为序列化后的高内聚 JSON 串
+    #[prost(message, repeated, tag = "11")]
+    pub endpoints: Vec<RuleEndpointProto>,
+}
+
+/// v1 规则声明的具名运行端点。
+#[derive(Clone, PartialEq, Message, Serialize, Deserialize)]
+pub struct RuleEndpointProto {
+    #[prost(string, tag = "1")]
+    pub id: String,
+    #[prost(string, tag = "2")]
+    pub transport: String,
+    #[prost(int32, tag = "3")]
+    pub container_port: i32,
+    #[prost(int32, tag = "4")]
+    pub default_host_port: i32,
+    #[prost(bool, tag = "5")]
+    pub required: bool,
 }
 
 /// 规则包元数据
@@ -46,6 +63,8 @@ pub struct RulePackageManifestProto {
     pub generated_at: i64,
     #[prost(int32, tag = "6")]
     pub rule_count: i32,
+    #[prost(int32, tag = "7")]
+    pub schema_version: i32,
 }
 
 /// 统一的 Protobuf 二进制规则包载荷
@@ -79,7 +98,7 @@ pub struct YamlRule {
     pub config_yaml: serde_json::Value, // 直接将嵌套的诱捕细节解析为 JSON 对象
 }
 
-// --- 企业级指纹规则合规性自动化审查测试套件 (CI/CD Rules Auditor) ---
+// --- 指纹规则合规性自动化审查测试套件 (CI/CD Rules Auditor) ---
 
 #[cfg(test)]
 mod tests {
@@ -226,8 +245,22 @@ mod tests {
     }
 
     const ALLOWED_CATEGORIES: &[&str] = &["cve_sim", "vuln_sim", "honeypot", "test_env"];
-    const ALLOWED_PROTOCOLS: &[&str] =
-        &["http", "redis", "smtp", "pop3", "imap", "ssh", "ftp", "rdp"];
+    const ALLOWED_PROTOCOLS: &[&str] = &[
+        "http",
+        "redis",
+        "smtp",
+        "pop3",
+        "imap",
+        "ssh",
+        "ftp",
+        "rdp",
+        "telnet",
+        "mysql",
+        "postgresql",
+        "smb",
+        "ldap",
+        "dns",
+    ];
     const ALLOWED_SEVERITIES: &[&str] = &["critical", "high", "medium", "low", "info"];
     const ALLOWED_HTTP_METHODS: &[&str] =
         &["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
@@ -329,6 +362,12 @@ mod tests {
             ("rdp", "vuln_sim") => "rdp/vuln/",
             ("rdp", "honeypot") => "rdp/honeypot/",
             ("rdp", "test_env") => "rdp/test-env/",
+            ("telnet", "honeypot") => "remote-access/telnet/honeypot/",
+            ("mysql", "honeypot") => "database/mysql/honeypot/",
+            ("postgresql", "honeypot") => "database/postgresql/honeypot/",
+            ("smb", "honeypot") => "enterprise/smb/honeypot/",
+            ("ldap", "honeypot") => "enterprise/ldap/honeypot/",
+            ("dns", "honeypot") => "network/dns/honeypot/",
             _ => "unknown/",
         }
     }
@@ -1238,6 +1277,85 @@ mod tests {
                     );
                     assert_rdp_id_partition(p, &rule_context);
                     assert_rdp_config(p, &rule_context);
+                }
+                "telnet" => {
+                    assert!(
+                        (630000..=639999).contains(&p.id),
+                        "Boundary Error: Telnet rule ID out of bounds. {}",
+                        rule_context
+                    );
+                    assert!(
+                        p.config_yaml.is_object(),
+                        "Validation Error: Telnet config must be an object. {}",
+                        rule_context
+                    );
+                }
+                "mysql" => {
+                    assert!(
+                        (310000..=319999).contains(&p.id),
+                        "Boundary Error: MySQL rule ID out of bounds. {}",
+                        rule_context
+                    );
+                    assert!(
+                        p.config_yaml.is_object(),
+                        "Validation Error: MySQL config must be an object. {}",
+                        rule_context
+                    );
+                }
+                "postgresql" => {
+                    assert!(
+                        (320000..=329999).contains(&p.id),
+                        "Boundary Error: PostgreSQL rule ID out of bounds. {}",
+                        rule_context
+                    );
+                    assert!(
+                        p.config_yaml.is_object(),
+                        "Validation Error: PostgreSQL config must be an object. {}",
+                        rule_context
+                    );
+                }
+                "smb" => {
+                    assert!(
+                        (700000..=709999).contains(&p.id),
+                        "Boundary Error: SMB rule ID out of bounds. {}",
+                        rule_context
+                    );
+                    assert!(
+                        p.config_yaml.is_object(),
+                        "Validation Error: SMB config must be an object. {}",
+                        rule_context
+                    );
+                }
+                "ldap" => {
+                    assert!(
+                        (710000..=719999).contains(&p.id),
+                        "Boundary Error: LDAP rule ID out of bounds. {}",
+                        rule_context
+                    );
+                    assert!(
+                        p.config_yaml
+                            .get("base_dn")
+                            .and_then(serde_json::Value::as_str)
+                            .is_some_and(|value| !value.trim().is_empty()),
+                        "Validation Error: LDAP base_dn is required. {}",
+                        rule_context
+                    );
+                }
+                "dns" => {
+                    assert!(
+                        (500000..=509999).contains(&p.id),
+                        "Boundary Error: DNS rule ID out of bounds. {}",
+                        rule_context
+                    );
+                    let records = p
+                        .config_yaml
+                        .get("records")
+                        .and_then(serde_json::Value::as_object);
+                    assert!(
+                        records.is_some_and(|records| !records.is_empty()),
+                        "Validation Error: DNS records must be a non-empty object. {}",
+                        rule_context
+                    );
                 }
                 _ => unreachable!("protocol was validated before protocol schema audit"),
             }
