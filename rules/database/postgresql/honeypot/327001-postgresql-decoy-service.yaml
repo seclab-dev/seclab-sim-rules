@@ -11,12 +11,14 @@ references:
   - "https://www.postgresql.org/docs/current/protocol.html"
 tags: ["postgresql", "database", "honeypot"]
 ruleVersion: "0.1.0-alpha.1"
-descriptionZh: "模拟 PostgreSQL 启动与认证阶段并记录数据库扫描。"
-descriptionEn: "Simulates PostgreSQL startup and authentication phases and records database scans."
+descriptionZh: "模拟 PostgreSQL 启动、弱口令认证与版本查询并记录数据库扫描。"
+descriptionEn: "Simulates PostgreSQL startup, weak-credential authentication, and version queries while recording database scans."
 protocol: "postgresql"
 configYaml:
   server_version: "16.2-seclab"
   credentials:
     - username: "postgres"
-      password: "example-only"
+      password: "postgres"
+    - username: "admin"
+      password: "admin"
   databases: ["postgres", "inventory"]

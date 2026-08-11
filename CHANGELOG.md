@@ -6,6 +6,7 @@
 
 ### Changed in alpha development
 
+- MySQL 与 PostgreSQL 诱捕规则改用典型弱口令，并与仿真引擎的实际认证行为保持一致。
 - 重写规则包 v1，增加 `schema_version: 1` 与具名端点声明，并要求导入端实际验证 Ed25519/minisign 签名。
 - 增加 Telnet、MySQL、PostgreSQL、SMB 和 LDAP 基础诱捕规则；格式版本仍保持 v1。
 - 增加同时声明 `dns-tcp` 与 `dns-udp` 端点的 DNS 诱捕规则，默认主机端口为 1053，容器内保持 53/TCP 与 53/UDP。
